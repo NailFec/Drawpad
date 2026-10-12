@@ -8,6 +8,14 @@
 
 #include <memory>
 
+// Qt enables Vulkan in QT_CONFIG when it was built with it, but QVulkanInstance
+// and QRhiVulkanInitParams stay incomplete unless vulkan/vulkan.h is present.
+#if QT_CONFIG(vulkan) && __has_include(<vulkan/vulkan.h>)
+#define DRAWPAD_HAS_VULKAN 1
+#else
+#define DRAWPAD_HAS_VULKAN 0
+#endif
+
 class QCanvasPainter;
 class QCanvasPainterFactory;
 class QOffscreenSurface;

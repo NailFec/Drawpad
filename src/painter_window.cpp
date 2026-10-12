@@ -70,7 +70,7 @@ bool PainterWindow::event(QEvent *event)
 void PainterWindow::init()
 {
     if (m_api == QRhi::Vulkan) {
-#if QT_CONFIG(vulkan)
+#if DRAWPAD_HAS_VULKAN
         QRhiVulkanInitParams params;
         params.inst = vulkanInstance();
         params.window = this;

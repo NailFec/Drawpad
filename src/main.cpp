@@ -8,7 +8,7 @@
 #include <QScreen>
 #include <QSurfaceFormat>
 
-#if QT_CONFIG(vulkan)
+#if DRAWPAD_HAS_VULKAN
 #include <QVulkanInstance>
 #endif
 
@@ -16,7 +16,7 @@ namespace {
 
 QRhi::Implementation defaultApi()
 {
-#if QT_CONFIG(vulkan)
+#if DRAWPAD_HAS_VULKAN
     return QRhi::Vulkan;
 #elif QT_CONFIG(opengl)
     return QRhi::OpenGLES2;
@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
     QSurfaceFormat::setDefaultFormat(format);
 #endif
 
-#if QT_CONFIG(vulkan)
+#if DRAWPAD_HAS_VULKAN
     QVulkanInstance vulkanInstance;
     if (graphicsApi == QRhi::Vulkan) {
         vulkanInstance.setExtensions(QRhiVulkanInitParams::preferredInstanceExtensions());
@@ -70,10 +70,20 @@ int main(int argc, char *argv[])
 #endif
         }
     }
+#elif QT_CONFIG(opengl)
+    if (graphicsApi == QRhi::Vulkan) {
+        qWarning("Vulkan headers are missing, falling back to OpenGL");
+        graphicsApi = QRhi::OpenGLES2;
+    }
+#else
+    if (graphicsApi == QRhi::Vulkan) {
+        qWarning("Vulkan headers are missing");
+        return 1;
+    }
 #endif
 
     drawpad::DrawpadWindow window(graphicsApi);
-#if QT_CONFIG(vulkan)
+#if DRAWPAD_HAS_VULKAN
     if (graphicsApi == QRhi::Vulkan)
         window.setVulkanInstance(&vulkanInstance);
 #endif
