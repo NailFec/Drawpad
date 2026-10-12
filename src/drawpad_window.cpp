@@ -12,7 +12,6 @@
 #include <QFont>
 #include <QKeyEvent>
 #include <QMessageBox>
-#include <QMouseEvent>
 #include <QResizeEvent>
 #include <QStandardPaths>
 
@@ -182,16 +181,12 @@ void DrawpadWindow::onActiveChanged()
     m_grabber.setGrabbed(isActive());
     if (isActive())
         return;
-    if (m_activeId) {
-        m_document.commitStroke(m_activeId);
-        m_activeId = 0;
-    }
-    if (!m_lasso.empty()) {
-        m_selection = m_document.selectInside(m_lasso);
-        m_lasso.clear();
-    }
-    m_eraserDown = false;
-    m_toolLocked = false;
+    m_holdPen = false;
+    m_holdEraser = false;
+    m_holdSelect = false;
+    m_tool = Tool::None;
+    m_pointerVisible = false;
+    finishHeldAction();
     m_tracker.endGesture();
     requestUpdate();
 }
@@ -215,8 +210,15 @@ void DrawpadWindow::onTouchpadsReady(int count, double width, double height)
 
 void DrawpadWindow::onContacts(const QVector<Contact> &contacts)
 {
+    m_contacts = contacts;
     if (!m_fitReady)
         updateFit();
+    m_pointerVisible = contacts.size() == 1 && m_fitReady;
+    if (m_pointerVisible) {
+        const Contact &finger = contacts.front();
+        m_pointer = QPointF(m_fit.left() + finger.nx * m_fit.width(), m_fit.top() + finger.ny * m_fit.height());
+    }
+
     std::vector<Contact> fingers;
     fingers.reserve(static_cast<size_t>(contacts.size()));
     for (const Contact &contact : contacts)
@@ -241,20 +243,14 @@ void DrawpadWindow::applyGesture(const GestureResult &result)
         }
         m_lasso.clear();
         m_eraserDown = false;
-        m_toolLocked = false;
     }
 
-    const Tool activeTool = m_toolLocked ? m_lockedTool : m_tool;
     if (result.inkPoint) {
-        if (!m_toolLocked) {
-            m_lockedTool = m_tool;
-            m_toolLocked = true;
-        }
-        if (activeTool == Tool::Pen) {
+        if (m_tool == Tool::Pen) {
             if (!m_activeId)
                 m_activeId = m_document.beginStroke(paletteColor(m_colorIndex), m_penWidth);
             m_document.addSample(m_activeId, result.point);
-        } else if (activeTool == Tool::Eraser) {
+        } else if (m_tool == Tool::Eraser) {
             if (m_eraserDown)
                 m_document.eraseAlong(m_eraserPoint, result.point, m_eraserWidth);
             m_eraserPoint = result.point;
@@ -271,7 +267,6 @@ void DrawpadWindow::applyGesture(const GestureResult &result)
             m_document.commitStroke(m_activeId);
         m_activeId = 0;
         m_eraserDown = false;
-        m_toolLocked = false;
     }
     if (result.finishLasso) {
         m_selection = m_document.selectInside(m_lasso);
@@ -289,17 +284,54 @@ void DrawpadWindow::pruneSelection()
     m_selection = std::move(kept);
 }
 
-void DrawpadWindow::setTool(Tool next)
+void DrawpadWindow::setModifier(Tool tool, bool down)
 {
+    if (tool == Tool::Pen)
+        m_holdPen = down;
+    else if (tool == Tool::Eraser)
+        m_holdEraser = down;
+    else if (tool == Tool::Select)
+        m_holdSelect = down;
+
+    Tool next = Tool::None;
+    if (down)
+        next = tool;
+    else if (m_holdPen)
+        next = Tool::Pen;
+    else if (m_holdEraser)
+        next = Tool::Eraser;
+    else if (m_holdSelect)
+        next = Tool::Select;
+    if (next == m_tool)
+        return;
+
+    finishHeldAction();
     m_tool = next;
-    requestUpdate();
+    if (!m_contacts.isEmpty())
+        onContacts(m_contacts);
+    else
+        requestUpdate();
+}
+
+void DrawpadWindow::finishHeldAction()
+{
+    if (m_activeId) {
+        m_document.commitStroke(m_activeId);
+        m_activeId = 0;
+    }
+    if (!m_lasso.empty()) {
+        m_selection = m_document.selectInside(m_lasso);
+        m_lasso.clear();
+    }
+    m_eraserDown = false;
+    m_tracker.releaseOneFinger();
 }
 
 void DrawpadWindow::bumpWidth(int delta)
 {
     if (m_tool == Tool::Select)
         return;
-    double &width = m_tool == Tool::Pen ? m_penWidth : m_eraserWidth;
+    double &width = m_tool == Tool::Eraser ? m_eraserWidth : m_penWidth;
     width = std::clamp(width + delta, 1.0, 64.0);
     requestUpdate();
 }
@@ -382,14 +414,14 @@ void DrawpadWindow::keyPressEvent(QKeyEvent *event)
         return;
 
     switch (event->key()) {
-    case Qt::Key_P:
-        setTool(Tool::Pen);
+    case Qt::Key_Q:
+        setModifier(Tool::Pen, true);
+        break;
+    case Qt::Key_W:
+        setModifier(Tool::Eraser, true);
         break;
     case Qt::Key_E:
-        setTool(Tool::Eraser);
-        break;
-    case Qt::Key_S:
-        setTool(Tool::Select);
+        setModifier(Tool::Select, true);
         break;
     case Qt::Key_Plus:
         bumpWidth(1);
@@ -412,15 +444,24 @@ void DrawpadWindow::keyPressEvent(QKeyEvent *event)
     }
 }
 
-void DrawpadWindow::mousePressEvent(QMouseEvent *event)
+void DrawpadWindow::keyReleaseEvent(QKeyEvent *event)
 {
-    for (int index = 0; index < 3; ++index) {
-        if (buttonRect(index).contains(event->position())) {
-            setTool(static_cast<Tool>(index));
-            return;
-        }
+    if (event->isAutoRepeat())
+        return;
+    switch (event->key()) {
+    case Qt::Key_Q:
+        setModifier(Tool::Pen, false);
+        break;
+    case Qt::Key_W:
+        setModifier(Tool::Eraser, false);
+        break;
+    case Qt::Key_E:
+        setModifier(Tool::Select, false);
+        break;
+    default:
+        PainterWindow::keyReleaseEvent(event);
+        break;
     }
-    PainterWindow::mousePressEvent(event);
 }
 
 void DrawpadWindow::paint(QCanvasPainter *painter)
@@ -478,6 +519,13 @@ void DrawpadWindow::paint(QCanvasPainter *painter)
         painter->beginPath();
         painter->circle(center.x(), center.y(), m_eraserWidth * m_camera.scale * 0.5);
         painter->stroke();
+    } else if (m_tool == Tool::None && m_pointerVisible) {
+        painter->setStrokeStyle(QColor(0x22, 0x22, 0x22));
+        painter->setLineWidth(1.5);
+        painter->setLineCap(QCanvasPainter::LineCap::Butt);
+        painter->beginPath();
+        painter->circle(m_pointer.x(), m_pointer.y(), 10);
+        painter->stroke();
     }
 
     if (m_touchpads == Touchpads::Missing) {
@@ -496,10 +544,11 @@ void DrawpadWindow::paint(QCanvasPainter *painter)
     painter->setFont(QFont(QStringLiteral("sans-serif"), 13));
     painter->setTextAlign(QCanvasPainter::TextAlign::Center);
     painter->setTextBaseline(QCanvasPainter::TextBaseline::Middle);
-    const char *labels[] = {"P", "E", "S"};
+    const char *labels[] = {"Q", "W", "E"};
     for (int index = 0; index < 3; ++index) {
         const QRectF button = buttonRect(index);
-        const bool active = static_cast<int>(m_tool) == index;
+        const bool active = (index == 0 && m_tool == Tool::Pen) || (index == 1 && m_tool == Tool::Eraser)
+            || (index == 2 && m_tool == Tool::Select);
         painter->setFillStyle(active ? QColor(0x3F, 0x3F, 0x3F) : QColor(0x2E, 0x2E, 0x2E));
         painter->beginPath();
         painter->roundRect(button, 8);
@@ -536,8 +585,8 @@ void DrawpadWindow::paint(QCanvasPainter *painter)
             drawDashedRect(painter, QRectF(center.x() - 12, center.y() - 8, 24, 16));
         }
 
-        if (active && m_tool != Tool::Select) {
-            const double width = m_tool == Tool::Pen ? m_penWidth : m_eraserWidth;
+        if (index == 0 || index == 1) {
+            const double width = index == 0 ? m_penWidth : m_eraserWidth;
             painter->setFillStyle(QColor(0xFF, 0xFF, 0xFF));
             painter->fillText(QString::number(width, 'f', 0), button.center().x(), button.bottom() - 14);
         }

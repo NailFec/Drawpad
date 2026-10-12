@@ -7,6 +7,7 @@
 #include "painter_window.h"
 #include "touchpad_grabber.h"
 
+#include <QPointF>
 #include <QString>
 #include <QVector>
 
@@ -25,7 +26,7 @@ protected:
     void paint(QCanvasPainter *painter) override;
     void resizeEvent(QResizeEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
-    void mousePressEvent(QMouseEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
     void onActiveChanged();
@@ -33,7 +34,8 @@ private:
     void onTouchpadsReady(int count, double width, double height);
     void updateFit();
     void applyGesture(const GestureResult &result);
-    void setTool(Tool next);
+    void setModifier(Tool tool, bool down);
+    void finishHeldAction();
     void bumpWidth(int delta);
     void save();
     void saveAs();
@@ -51,15 +53,19 @@ private:
     QRectF m_fit;
     bool m_fitReady = false;
     double m_aspect = 1.6;
-    Tool m_tool = Tool::Pen;
+    Tool m_tool = Tool::None;
+    bool m_holdPen = false;
+    bool m_holdEraser = false;
+    bool m_holdSelect = false;
     int m_colorIndex = 0;
     double m_penWidth = 4;
     double m_eraserWidth = 16;
     std::uint64_t m_activeId = 0;
     bool m_eraserDown = false;
     PointD m_eraserPoint;
-    bool m_toolLocked = false;
-    Tool m_lockedTool = Tool::Pen;
+    QVector<Contact> m_contacts;
+    bool m_pointerVisible = false;
+    QPointF m_pointer;
     std::vector<PointD> m_lasso;
     std::vector<std::uint64_t> m_selection;
     QString m_path;

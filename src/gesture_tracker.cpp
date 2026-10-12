@@ -22,6 +22,12 @@ void GestureTracker::endGesture()
     m_latchDistance = 0;
 }
 
+void GestureTracker::releaseOneFinger()
+{
+    if (m_mode == Mode::Ink || m_mode == Mode::Lasso || m_mode == Mode::Move)
+        m_mode = Mode::Idle;
+}
+
 void GestureTracker::applyTwoFingers(const Contact &first, const Contact &second, Camera &camera,
                                      const QRectF &fit)
 {
@@ -111,6 +117,8 @@ GestureResult GestureTracker::update(const std::vector<Contact> &contacts, Tool 
     const QPointF screen(fit.left() + contacts[0].nx * fit.width(), fit.top() + contacts[0].ny * fit.height());
     const PointD canvas = camera.toCanvas(screen, fit);
     if (m_mode == Mode::Idle) {
+        if (tool == Tool::None)
+            return result;
         if (tool == Tool::Select)
             m_mode = startsInSelection ? Mode::Move : Mode::Lasso;
         else

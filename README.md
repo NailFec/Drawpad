@@ -32,14 +32,14 @@ sudo pacman -S qt6-canvaspainter
 
 ## Keys
 
-- `P`, `E`, and `S` select the pen, eraser, and selection tool
+- One finger shows a hollow circle. Hold `Q` to draw, `W` to erase, and `E` to select
 - `1` through `6` select black, white, red, orange, blue, and green. `1` is the default
-- `+` and `-` change the active pen or eraser width
-- One finger in selection draws a lasso. Strokes that lie entirely inside it become selected. A later drag that starts inside that selection moves those strokes
+- `+` and `-` change the pen width, or the eraser width while `W` is held
+- While `E` is held, one finger draws a lasso. Strokes that lie entirely inside it become selected. A later drag that starts inside that selection moves those strokes
 - `Ctrl+S` saves, `Ctrl+Shift+S` saves to a new file, and `Ctrl+O` opens a file
 - `Escape` quits and releases the touchpad
 
-The touchpad is grabbed only while the window is active. A mouse can still move the window, resize it, and click the toolbar. Resizing keeps the same canvas region under the touchpad.
+The touchpad is grabbed only while the window is active. A mouse can still move the window and resize it. Resizing keeps the same canvas region under the touchpad.
 
 Documents are saved as `.drawpad` JSON. Opening a file replaces the current drawing.
 

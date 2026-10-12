@@ -42,6 +42,7 @@ private slots:
     void eraserDeletesTheTouchedSegmentOnly();
     void documentRoundTripsDoubles();
     void closeFingersPanAndSpreadFingersLatchZoom();
+    void oneFingerWithoutAToolDoesNotInk();
 };
 
 void DrawpadTests::fitRectLeavesTheExtraSpaceOnTheRightOrBottom()
@@ -226,6 +227,35 @@ void DrawpadTests::closeFingersPanAndSpreadFingersLatchZoom()
     finished.update({Contact {1, 0.25, 0.25}}, Tool::Pen, camera, fit, false);
     const GestureResult committed = finished.update({}, Tool::Pen, camera, fit, false);
     QVERIFY(committed.commitInk);
+}
+
+void DrawpadTests::oneFingerWithoutAToolDoesNotInk()
+{
+    GestureTracker hover;
+    hover.setTouchpadSize(100, 64);
+    Camera camera;
+    const QRectF fit(0, 0, 200, 128);
+    const GestureResult idle = hover.update({Contact {1, 0.2, 0.3}}, Tool::None, camera, fit, false);
+    QVERIFY(!idle.inkPoint);
+    QVERIFY(!idle.lassoPoint);
+    QVERIFY(!idle.commitInk);
+
+    hover.releaseOneFinger();
+    const GestureResult drew = hover.update({Contact {1, 0.2, 0.3}}, Tool::Pen, camera, fit, false);
+    QVERIFY(drew.inkPoint);
+
+    GestureTracker pan;
+    pan.setTouchpadSize(100, 64);
+    Camera panCamera;
+    Contact left {1, 0.25, 0.5};
+    Contact right {2, 0.25, 0.5625};
+    pan.update({left}, Tool::None, panCamera, fit, false);
+    pan.update({left, right}, Tool::None, panCamera, fit, false);
+    left.nx = 0.5;
+    right.nx = 0.5;
+    pan.update({left, right}, Tool::None, panCamera, fit, false);
+    expectNear(panCamera.scale, 1);
+    expectNear(panCamera.originX, -50);
 }
 
 QTEST_GUILESS_MAIN(DrawpadTests)

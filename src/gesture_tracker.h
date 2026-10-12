@@ -10,7 +10,7 @@
 
 namespace drawpad {
 
-enum class Tool { Pen, Eraser, Select };
+enum class Tool { Pen, Eraser, Select, None };
 
 struct Contact {
     int id = 0;
@@ -33,6 +33,7 @@ class GestureTracker {
 public:
     void setTouchpadSize(double width, double height);
     void endGesture();
+    void releaseOneFinger();
 
     GestureResult update(const std::vector<Contact> &contacts, Tool tool, Camera &camera,
                          const QRectF &fit, bool startsInSelection);
